@@ -34,6 +34,8 @@ async def create_message(
 async def list_messages(
         channel_id: UUID,
         limit: int = Query(default=50, ge=1, le=100),
+        before: UUID | None = Query(default=None),
+        after: UUID | None = Query(default=None),
         db: AsyncSession = Depends(get_db),
         current_user = Depends(get_cuurent_user),
 ):
@@ -42,6 +44,8 @@ async def list_messages(
         current_user=current_user,
         channel_id=channel_id,
         limit=limit,
+        before=before,
+        after=after
     )
 
 @router.patch(
@@ -76,3 +80,22 @@ async def delete_message(
         message_id=message_id,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@router.get(
+    "/channels/{channel_id}/messages/long-poll",
+    response_model=list[MessageResponse],
+)
+async def long_poll_messages(
+        channel_id: UUID,
+        after: UUID | None = Query(default=None),
+        timeout: int = Query(default=20, ge=1, le=30),
+        db: AsyncSession = Depends(get_db),
+        current_user = Depends(get_cuurent_user),
+):
+    return await MessageService.long_poll_messages(
+        db=db,
+        current_user=current_user,
+        channel_id=channel_id,
+        after=after,
+        timeout_seconds=timeout,
+    )

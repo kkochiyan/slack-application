@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_cuurent_user
@@ -44,3 +44,15 @@ async def get_workspace(
         workspace_id=workspace_id,
         current_user=current_user
     )
+
+@router.delete(
+    "/{workspace_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_workspace(
+        workspace_id: UUID,
+        db: AsyncSession = Depends(get_db),
+        current_user = Depends(get_cuurent_user),
+):
+    await WorkspaceService.delete_workspace(db, current_user, workspace_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

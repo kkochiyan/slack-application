@@ -73,3 +73,10 @@ class WorkspaceRepository:
             )
         )
         return bool(result.scalar())
+
+    @staticmethod
+    async def delete_workspace(
+            db: AsyncSession,
+            workspace: Workspace,
+    ) -> None:
+        await db.delete(workspace)

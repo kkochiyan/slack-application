@@ -154,3 +154,36 @@ class ChannelService:
                 )
 
         return channel
+
+    @staticmethod
+    async def delete_channel(
+            db: AsyncSession,
+            current_user,
+            channel_id: UUID,
+    ) -> None:
+        channel = await ChannelRepository.get_by_id(db, channel_id)
+        if not channel:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Channel not found",
+            )
+
+        is_workspace_member = await WorkspaceRepository.is_user_member(
+            db=db,
+            workspace_id=channel.workspace_id,
+            user_id=current_user.id,
+        )
+        if not is_workspace_member:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Channel not found",
+            )
+
+        if channel.created_by != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only channel creator can delete channel",
+            )
+
+        await ChannelRepository.delete_channel(db, channel)
+        await db.commit()

@@ -82,3 +82,25 @@ class WorkspaceService:
             )
 
         return workspace
+
+    @staticmethod
+    async def delete_workspace(
+            db: AsyncSession,
+            current_user,
+            workspace_id: UUID,
+    ) -> None:
+        workspace = await WorkspaceRepository.get_by_id(db, workspace_id)
+        if not workspace:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Workspace not found",
+            )
+
+        if workspace.owner_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only workspace owner can delete workspace",
+            )
+
+        await WorkspaceRepository.delete_workspace(db, workspace)
+        await db.commit()

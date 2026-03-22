@@ -43,3 +43,10 @@ class ChannelRepository:
     @staticmethod
     async def add(db: AsyncSession, channel: Channel) -> None:
         db.add(channel)
+
+    @staticmethod
+    async def delete_channel(
+            db: AsyncSession,
+            channel: Channel,
+    ) -> None:
+        await db.delete(channel)

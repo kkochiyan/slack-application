@@ -36,11 +36,11 @@ class Message(Base, TimestampMixin):
         nullable=False,
     )
 
-    # message_type: Mapped[str] = mapped_column(
-    #     String(50),
-    #     default="text",
-    #     nullable=False,
-    # )
+    message_type: Mapped[str] = mapped_column(
+        String(50),
+        default="text",
+        nullable=False,
+    )
 
     edited_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),

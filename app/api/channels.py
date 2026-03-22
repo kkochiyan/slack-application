@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_cuurent_user
@@ -59,3 +59,14 @@ async def get_channel(
         channel_id=channel_id,
     )
 
+@router.delete(
+    "/channels/{channel_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_channel(
+        channel_id: UUID,
+        db: AsyncSession = Depends(get_db),
+        current_user = Depends(get_cuurent_user),
+):
+    await ChannelService.delete_channel(db, current_user, channel_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

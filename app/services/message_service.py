@@ -195,6 +195,10 @@ class MessageService:
 
         await db.commit()
         await db.refresh(message)
+        await redis_client.publish(
+            channel_messages_topic(str(message.channel_id)),
+            str(message.id),
+        )
         return message
 
     @staticmethod
@@ -220,6 +224,10 @@ class MessageService:
 
         message.deleted_at = datetime.now(timezone.utc)
         await db.commit()
+        await redis_client.publish(
+            channel_messages_topic(str(message.channel_id)),
+            str(message.id),
+        )
 
     @staticmethod
     async def long_poll_messages(
@@ -234,6 +242,18 @@ class MessageService:
             current_user=current_user,
             channel_id=channel_id,
         )
+
+        if after:
+            after_message = await MessageService._get_accessible_message(
+                db=db,
+                current_user=current_user,
+                message_id=after,
+            )
+            if after_message.channel_id != channel_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="'after' message does not belong to this channel",
+                )
 
         messages = await MessageRepository.get_channel_messages(
             db=db,

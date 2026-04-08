@@ -24,4 +24,7 @@ class UserService:
             display_name=display_name,
         )
 
-        return await UserRepository.create(db, user)
+        await UserRepository.create(db, user)
+        await db.commit()
+        await db.refresh(user)
+        return user

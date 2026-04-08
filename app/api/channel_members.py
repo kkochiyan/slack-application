@@ -43,6 +43,22 @@ async def list_channels_members(
     )
 
 @router.delete(
+    "/channels/{channel_id}/members/me",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def leave_channel(
+    channel_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_cuurent_user),
+):
+    await ChannelMemberService.leave_channel(
+        db=db,
+        current_user=current_user,
+        channel_id=channel_id,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@router.delete(
     "/channels/{channel_id}/members/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )

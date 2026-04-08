@@ -13,4 +13,3 @@ class WorkspaceMemberResponse(BaseModel):
 
     class Config:
         from_attributes = True
-

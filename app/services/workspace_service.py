@@ -17,7 +17,20 @@ class WorkspaceService:
             name: str,
             slug: str
     ) -> Workspace:
-        normalized_slug = slug.strip().lower()
+        normalized_name = name.strip()
+        normalized_slug = slug.strip().lower().replace(' ', '-')
+
+        if not normalized_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Workspace name cannot be empty",
+            )
+
+        if not normalized_slug:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Workspace slug cannot be empty",
+            )
 
         existing = await WorkspaceRepository.get_by_slug(db, normalized_slug)
         if existing:

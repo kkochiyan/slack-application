@@ -34,5 +34,3 @@ class Workspace(Base, TimestampMixin):
         nullable=False,
         index=True,
     )
-
-

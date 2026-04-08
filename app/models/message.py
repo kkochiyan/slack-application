@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, String, Text, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -10,6 +10,10 @@ from app.models.mixins import TimestampMixin
 
 class Message(Base, TimestampMixin):
     __tablename__ = "messages"
+
+    __table_args__ = (
+        Index("ix_messages_channel_created_at", "channel_id", "created_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -52,4 +56,3 @@ class Message(Base, TimestampMixin):
         nullable=True,
         index=True,
     )
-

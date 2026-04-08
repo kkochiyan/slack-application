@@ -9,6 +9,7 @@ from app.models.channel_member import ChannelMember
 from app.repositories.channel_member_repository import ChannelMemberRepository
 from app.repositories.channel_repository import ChannelRepository
 from app.repositories.workspace_repository import WorkspaceRepository
+from app.repositories.workspace_member_repository import WorkspaceMemberRepository
 
 class ChannelService:
 
@@ -21,16 +22,22 @@ class ChannelService:
             description: str | None,
             is_private: bool,
     ) -> Channel:
-        is_workspace_member = await WorkspaceRepository.is_user_member(
+        requester_membership = await WorkspaceMemberRepository.get_by_workspace_and_user(
             db=db,
             workspace_id=workspace_id,
             user_id=current_user.id,
         )
 
-        if not is_workspace_member:
+        if not requester_membership:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Workspace not found",
+            )
+
+        if requester_membership.role != "owner":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only workspace owner can create channels",
             )
 
         normalized_name = name.strip().lower()

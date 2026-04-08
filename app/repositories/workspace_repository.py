@@ -9,7 +9,7 @@ from app.models.workspace_member import WorkspaceMember
 class WorkspaceRepository:
 
     @staticmethod
-    async def get_by_slug(db: AsyncSession, slug: str):
+    async def get_by_slug(db: AsyncSession, slug: str) -> Workspace | None:
         result = await db.execute(
             select(Workspace).where(Workspace.slug == slug)
         )
@@ -17,7 +17,7 @@ class WorkspaceRepository:
         return result.scalar_one_or_none()
 
     @staticmethod
-    async def get_by_id(db: AsyncSession, workspace_id: UUID):
+    async def get_by_id(db: AsyncSession, workspace_id: UUID) -> Workspace | None:
         result = await db.execute(
             select(Workspace).where(Workspace.id == workspace_id)
         )
@@ -38,7 +38,7 @@ class WorkspaceRepository:
             db: AsyncSession,
             workspace_id: UUID,
             user_id: UUID,
-    ):
+    ) -> Workspace | None:
         result = await db.execute(
             select(Workspace)
             .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
@@ -51,18 +51,18 @@ class WorkspaceRepository:
         return result.scalar_one_or_none()
 
     @staticmethod
-    async def add_workspace(db: AsyncSession, workspace: Workspace):
+    async def add_workspace(db: AsyncSession, workspace: Workspace) -> None:
         db.add(workspace)
 
     @staticmethod
-    async def add_membership(db: AsyncSession, membership: WorkspaceMember):
+    async def add_membership(db: AsyncSession, membership: WorkspaceMember) -> None:
         db.add(membership)
 
     @staticmethod
     async def is_user_member(
             db: AsyncSession,
-            workspace_id,
-            user_id,
+            workspace_id: UUID,
+            user_id: UUID,
     ) -> bool:
         result = await db.execute(
             select(

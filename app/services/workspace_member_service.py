@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.workspace_member import WorkspaceMember
 from app.repositories.user_repository import UserRepository
 from app.repositories.workspace_member_repository import WorkspaceMemberRepository
-from app.repositories.workspace_repository import WorkspaceRepository
 
 class WorkspaceMemberService:
 
@@ -23,10 +22,17 @@ class WorkspaceMemberService:
             workspace_id=workspace_id,
             user_id=current_user.id
         )
+
         if not requester_membership:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Workspace not found",
+            )
+
+        if requester_membership.role != "owner":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only workspace owner can add members",
             )
 
         target_user = await UserRepository.get_by_id(db, user_id)
@@ -100,10 +106,17 @@ class WorkspaceMemberService:
             workspace_id=workspace_id,
             user_id=current_user.id,
         )
+
         if not requester_membership:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Workspace not found",
+            )
+
+        if requester_membership.role != "owner":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only workspace owner can remove members",
             )
 
         target_membership = await WorkspaceMemberRepository.get_by_workspace_and_user(
@@ -117,11 +130,38 @@ class WorkspaceMemberService:
                 detail="Workspace member not found",
             )
 
-        if target_membership.role == "owner" and target_membership.user_id == current_user.id:
+        if target_membership.role == "owner":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Owner cannot remove themselves from workspace",
+                detail="Workspace owner cannot be removed",
             )
 
         await WorkspaceMemberRepository.delete(db, target_membership)
+        await db.commit()
+
+    @staticmethod
+    async def leave_workspace(
+            db: AsyncSession,
+            current_user,
+            workspace_id: UUID,
+    ) -> None:
+        membership = await WorkspaceMemberRepository.get_by_workspace_and_user(
+            db=db,
+            workspace_id=workspace_id,
+            user_id=current_user.id,
+        )
+
+        if not membership:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Workspace not found",
+            )
+
+        if membership.role == "owner":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Workspace owner cannot leave the workspace",
+            )
+
+        await WorkspaceMemberRepository.delete(db, membership)
         await db.commit()

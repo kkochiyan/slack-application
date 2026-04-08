@@ -43,6 +43,22 @@ async def list_workspace_members(
     )
 
 @router.delete(
+    "/workspaces/{workspace_id}/members/me",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def leave_workspace(
+    workspace_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_cuurent_user),
+):
+    await WorkspaceMemberService.leave_workspace(
+        db=db,
+        current_user=current_user,
+        workspace_id=workspace_id,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@router.delete(
     "/workspaces/{workspace_id}/members/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )

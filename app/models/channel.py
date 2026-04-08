@@ -34,7 +34,7 @@ class Channel(Base, TimestampMixin):
 
     description: Mapped[str] = mapped_column(
         String(255),
-        nullable=False,
+        nullable=True,
     )
 
     is_private: Mapped[bool] = mapped_column(

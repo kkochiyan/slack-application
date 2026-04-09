@@ -1,9 +1,9 @@
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 class WorkspaceMemberAdd(BaseModel):
-    user_id: UUID
+    email: EmailStr
 
 class WorkspaceMemberResponse(BaseModel):
     id: UUID

@@ -24,7 +24,7 @@ async def add_workspace_member(
         db=db,
         current_user=current_user,
         workspace_id=workspace_id,
-        user_id=data.user_id
+        email=data.email,
     )
 
 @router.get(
@@ -75,4 +75,3 @@ async def remove_workspace_member(
         user_id=user_id,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-

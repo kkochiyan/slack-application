@@ -15,7 +15,7 @@ class WorkspaceMemberService:
             db: AsyncSession,
             current_user,
             workspace_id: UUID,
-            user_id: UUID,
+            email: str,
     ) -> WorkspaceMember:
         requester_membership = await WorkspaceMemberRepository.get_by_workspace_and_user(
             db=db,
@@ -35,7 +35,9 @@ class WorkspaceMemberService:
                 detail="Only workspace owner can add members",
             )
 
-        target_user = await UserRepository.get_by_id(db, user_id)
+        normalized_email = email.strip().lower()
+
+        target_user = await UserRepository.get_by_email(db, normalized_email)
         if not target_user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -45,7 +47,7 @@ class WorkspaceMemberService:
         existing_membership = await WorkspaceMemberRepository.get_by_workspace_and_user(
             db=db,
             workspace_id=workspace_id,
-            user_id=user_id,
+            user_id=target_user.id,
         )
         if existing_membership:
             raise HTTPException(
@@ -55,7 +57,7 @@ class WorkspaceMemberService:
 
         membership = WorkspaceMember(
             workspace_id=workspace_id,
-            user_id=user_id,
+            user_id=target_user.id,
             role="member",
         )
 

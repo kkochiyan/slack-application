@@ -16,7 +16,7 @@ class ChannelMemberService:
         db: AsyncSession,
         current_user,
         channel_id: UUID,
-        user_id: UUID,
+        email: str,
     ) -> ChannelMember:
         channel = await ChannelRepository.get_by_id(db, channel_id)
         if not channel:
@@ -59,7 +59,9 @@ class ChannelMemberService:
                 detail="Only channel owner can add members",
             )
 
-        target_user = await UserRepository.get_by_id(db, user_id)
+        normalized_email = email.strip().lower()
+
+        target_user = await UserRepository.get_by_email(db, normalized_email)
         if not target_user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -69,7 +71,7 @@ class ChannelMemberService:
         target_is_workspace_member = await WorkspaceRepository.is_user_member(
             db=db,
             workspace_id=channel.workspace_id,
-            user_id=user_id,
+            user_id=target_user.id,
         )
         if not target_is_workspace_member:
             raise HTTPException(
@@ -80,7 +82,7 @@ class ChannelMemberService:
         existing = await ChannelMemberRepository.get_by_channel_and_user(
             db=db,
             channel_id=channel_id,
-            user_id=user_id,
+            user_id=target_user.id,
         )
         if existing:
             raise HTTPException(
@@ -90,7 +92,7 @@ class ChannelMemberService:
 
         membership = ChannelMember(
             channel_id=channel_id,
-            user_id=user_id,
+            user_id=target_user.id,
             role="member",
         )
 

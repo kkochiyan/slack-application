@@ -14,7 +14,7 @@ router = APIRouter(tags=["Channel Members"])
     "/channels/{channel_id}/members",
     response_model=ChannelMemberResponse,
 )
-async def get_channel_member(
+async def add_channel_member(
         channel_id: UUID,
         data: ChannelMemberAdd,
         db: AsyncSession = Depends(get_db),
@@ -24,14 +24,14 @@ async def get_channel_member(
         db=db,
         current_user=current_user,
         channel_id=channel_id,
-        user_id=data.user_id,
+        email=data.email,
     )
 
 @router.get(
     "/channels/{channel_id}/members",
     response_model=list[ChannelMemberResponse],
 )
-async def list_channels_members(
+async def list_channel_members(
         channel_id: UUID,
         db: AsyncSession = Depends(get_db),
         current_user = Depends(get_cuurent_user),

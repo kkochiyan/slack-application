@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     postgres_port: int = 5432
     postgres_db: str = "messenger"
     postgres_user: str = "postgres"
-    postrges_password: str = "Karen~2004~"
+    postgres_password: str = "password"
 
     database_url: str | None = None
     redis_url: str = "redis://localhost:6379/0"
@@ -21,7 +21,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 30
 
-    backend_cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    backend_cors_origins: list[str] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -37,7 +40,7 @@ class Settings(BaseSettings):
             return self.database_url
 
         return (
-            f"postgresql+asyncpg://{self.postgres_user}:{self.postrges_password}"
+            f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 

@@ -10,6 +10,7 @@ class WorkspaceMemberResponse(BaseModel):
     workspace_id: UUID
     user_id: UUID
     role: str
+    display_name: str | None
 
     class Config:
         from_attributes = True

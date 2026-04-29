@@ -1,4 +1,5 @@
 import asyncio
+from collections import defaultdict
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -14,6 +15,11 @@ from app.repositories.workspace_repository import WorkspaceRepository
 
 
 class MessageService:
+    _pubsub = None
+    _listener_task: asyncio.Task | None = None
+    _waiters: dict[str, set[asyncio.Event]] = defaultdict(set)
+    _listener_lock = asyncio.Lock()
+
     @staticmethod
     def _normalize_content(content: str) -> str:
         normalized_content = content.strip()
@@ -86,13 +92,152 @@ class MessageService:
         return message
 
     @staticmethod
+    async def _ensure_message_belongs_to_channel(
+        db: AsyncSession,
+        current_user,
+        message_id: UUID,
+        channel_id: UUID,
+        field_name: str,
+    ) -> None:
+        message = await MessageService._get_accessible_message(
+            db=db,
+            current_user=current_user,
+            message_id=message_id,
+        )
+        if message.channel_id != channel_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"'{field_name}' message does not belong to this channel",
+            )
+
+    @staticmethod
+    async def _publish_channel_message_event(
+        channel_id: UUID,
+        message_id: UUID,
+    ) -> None:
+        await redis_client.publish(
+            channel_messages_topic(str(channel_id)),
+            str(message_id),
+        )
+
+    @staticmethod
+    def _find_message_in_payload_or_500(
+        messages: list[dict],
+        message_id: UUID,
+        detail: str,
+    ) -> dict:
+        for item in messages:
+            if item["id"] == message_id:
+                return item
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=detail,
+        )
+
+    @staticmethod
+    async def _ensure_pubsub_listener_started() -> None:
+        listener_running = (
+            MessageService._listener_task is not None
+            and not MessageService._listener_task.done()
+        )
+        if listener_running:
+            return
+
+        async with MessageService._listener_lock:
+            listener_running = (
+                MessageService._listener_task is not None
+                and not MessageService._listener_task.done()
+            )
+            if listener_running:
+                return
+
+            MessageService._pubsub = redis_client.pubsub()
+            await MessageService._pubsub.psubscribe("channel:*:messages")
+            MessageService._listener_task = asyncio.create_task(
+                MessageService._pubsub_listener_loop()
+            )
+
+    @staticmethod
+    async def _pubsub_listener_loop() -> None:
+        try:
+            while True:
+                message = await MessageService._pubsub.get_message(
+                    ignore_subscribe_messages=True,
+                    timeout=1.0,
+                )
+
+                if message is None:
+                    await asyncio.sleep(0.1)
+                    continue
+
+                topic = message.get("channel")
+
+                if isinstance(topic, bytes):
+                    topic = topic.decode()
+
+                if not isinstance(topic, str):
+                    continue
+
+                waiters = MessageService._waiters.get(topic)
+                if not waiters:
+                    continue
+
+                for event in list(waiters):
+                    event.set()
+
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            print(f"Message pubsub listener error: {e}")
+
+    @staticmethod
+    async def _wait_for_channel_message(
+        channel_id: UUID,
+        timeout_seconds: int,
+    ) -> None:
+        await MessageService._ensure_pubsub_listener_started()
+
+        topic = channel_messages_topic(str(channel_id))
+        event = asyncio.Event()
+        MessageService._waiters[topic].add(event)
+
+        try:
+            await asyncio.wait_for(event.wait(), timeout=timeout_seconds)
+        except TimeoutError:
+            pass
+        finally:
+            MessageService._waiters[topic].discard(event)
+            if not MessageService._waiters[topic]:
+                MessageService._waiters.pop(topic, None)
+
+    @staticmethod
+    async def shutdown_pubsub_listener() -> None:
+        if MessageService._listener_task is not None:
+            MessageService._listener_task.cancel()
+            try:
+                await MessageService._listener_task
+            except asyncio.CancelledError:
+                pass
+            MessageService._listener_task = None
+
+        if MessageService._pubsub is not None:
+            await MessageService._pubsub.punsubscribe("channel:*:messages")
+            await MessageService._pubsub.aclose()
+            MessageService._pubsub = None
+
+    @staticmethod
     async def create_message(
         db: AsyncSession,
         current_user,
         channel_id: UUID,
         content: str,
-    ) -> Message:
-        await MessageService._ensure_channel_access(db, current_user, channel_id)
+    ) -> dict:
+        await MessageService._ensure_channel_access(
+            db=db,
+            current_user=current_user,
+            channel_id=channel_id,
+        )
 
         normalized_content = MessageService._normalize_content(content)
 
@@ -107,12 +252,31 @@ class MessageService:
         await db.commit()
         await db.refresh(message)
 
-        await redis_client.publish(
-            channel_messages_topic(str(channel_id)),
-            str(message.id),
+        await MessageService._publish_channel_message_event(
+            channel_id=channel_id,
+            message_id=message.id,
         )
 
-        return message
+        result = await MessageRepository.get_channel_messages(
+            db=db,
+            channel_id=channel_id,
+            limit=1,
+            after=message.id,
+        )
+
+        if result:
+            return result[0]
+
+        result = await MessageRepository.get_channel_messages(
+            db=db,
+            channel_id=channel_id,
+            limit=50,
+        )
+        return MessageService._find_message_in_payload_or_500(
+            messages=result,
+            message_id=message.id,
+            detail="Created message could not be loaded",
+        )
 
     @staticmethod
     async def list_messages(
@@ -122,8 +286,12 @@ class MessageService:
         limit: int = 50,
         before: UUID | None = None,
         after: UUID | None = None,
-    ) -> list[Message]:
-        await MessageService._ensure_channel_access(db, current_user, channel_id)
+    ) -> list[dict]:
+        await MessageService._ensure_channel_access(
+            db=db,
+            current_user=current_user,
+            channel_id=channel_id,
+        )
 
         if before and after:
             raise HTTPException(
@@ -132,28 +300,22 @@ class MessageService:
             )
 
         if before:
-            before_message = await MessageService._get_accessible_message(
+            await MessageService._ensure_message_belongs_to_channel(
                 db=db,
                 current_user=current_user,
                 message_id=before,
+                channel_id=channel_id,
+                field_name="before",
             )
-            if before_message.channel_id != channel_id:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="'before' message does not belong to this channel",
-                )
 
         if after:
-            after_message = await MessageService._get_accessible_message(
+            await MessageService._ensure_message_belongs_to_channel(
                 db=db,
                 current_user=current_user,
                 message_id=after,
+                channel_id=channel_id,
+                field_name="after",
             )
-            if after_message.channel_id != channel_id:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="'after' message does not belong to this channel",
-                )
 
         return await MessageRepository.get_channel_messages(
             db=db,
@@ -169,7 +331,7 @@ class MessageService:
         current_user,
         message_id: UUID,
         content: str,
-    ) -> Message:
+    ) -> dict:
         message = await MessageService._get_accessible_message(
             db=db,
             current_user=current_user,
@@ -195,11 +357,22 @@ class MessageService:
 
         await db.commit()
         await db.refresh(message)
-        await redis_client.publish(
-            channel_messages_topic(str(message.channel_id)),
-            str(message.id),
+
+        await MessageService._publish_channel_message_event(
+            channel_id=message.channel_id,
+            message_id=message.id,
         )
-        return message
+
+        result = await MessageRepository.get_channel_messages(
+            db=db,
+            channel_id=message.channel_id,
+            limit=50,
+        )
+        return MessageService._find_message_in_payload_or_500(
+            messages=result,
+            message_id=message.id,
+            detail="Updated message could not be loaded",
+        )
 
     @staticmethod
     async def delete_message(
@@ -224,9 +397,10 @@ class MessageService:
 
         message.deleted_at = datetime.now(timezone.utc)
         await db.commit()
-        await redis_client.publish(
-            channel_messages_topic(str(message.channel_id)),
-            str(message.id),
+
+        await MessageService._publish_channel_message_event(
+            channel_id=message.channel_id,
+            message_id=message.id,
         )
 
     @staticmethod
@@ -236,7 +410,7 @@ class MessageService:
         channel_id: UUID,
         after: UUID | None = None,
         timeout_seconds: int = 20,
-    ) -> list[Message]:
+    ) -> list[dict]:
         await MessageService._ensure_channel_access(
             db=db,
             current_user=current_user,
@@ -244,16 +418,13 @@ class MessageService:
         )
 
         if after:
-            after_message = await MessageService._get_accessible_message(
+            await MessageService._ensure_message_belongs_to_channel(
                 db=db,
                 current_user=current_user,
                 message_id=after,
+                channel_id=channel_id,
+                field_name="after",
             )
-            if after_message.channel_id != channel_id:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="'after' message does not belong to this channel",
-                )
 
         messages = await MessageRepository.get_channel_messages(
             db=db,
@@ -262,39 +433,18 @@ class MessageService:
             after=after,
             limit=50,
         )
-
         if messages:
             return messages
 
-        pubsub = redis_client.pubsub()
-        topic = channel_messages_topic(str(channel_id))
-        await pubsub.subscribe(topic)
+        await MessageService._wait_for_channel_message(
+            channel_id=channel_id,
+            timeout_seconds=timeout_seconds,
+        )
 
-        try:
-            try:
-                async with asyncio.timeout(timeout_seconds):
-                    while True:
-                        event = await pubsub.get_message(
-                            ignore_subscribe_messages=True,
-                            timeout=1.0,
-                        )
-                        if event is not None:
-                            break
-
-                        await asyncio.sleep(0.1)
-            except TimeoutError:
-                return []
-
-            messages = await MessageRepository.get_channel_messages(
-                db=db,
-                channel_id=channel_id,
-                before=None,
-                after=after,
-                limit=50,
-            )
-
-            return messages
-
-        finally:
-            await pubsub.unsubscribe(topic)
-            await pubsub.aclose()
+        return await MessageRepository.get_channel_messages(
+            db=db,
+            channel_id=channel_id,
+            before=None,
+            after=after,
+            limit=50,
+        )

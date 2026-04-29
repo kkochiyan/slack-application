@@ -13,7 +13,7 @@ class MessageResponse(BaseModel):
     id: UUID
     channel_id: UUID
     author_id: UUID
-    # author_display_name: str
+    author_display_name: str | None = None
     content: str
     message_type: str
     edited_at: datetime | None

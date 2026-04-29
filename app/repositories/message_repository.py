@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.message import Message
+from app.models.user import User
 
 
 class MessageRepository:
@@ -25,9 +26,21 @@ class MessageRepository:
         limit: int = 50,
         before: UUID | None = None,
         after: UUID | None = None,
-    ) -> list[Message]:
+    ) -> list[dict]:
         query = (
-            select(Message)
+            select(
+                Message.id,
+                Message.channel_id,
+                Message.author_id,
+                User.display_name.label("author_display_name"),
+                Message.content,
+                Message.message_type,
+                Message.edited_at,
+                Message.deleted_at,
+                Message.created_at,
+                Message.updated_at,
+            )
+            .join(User, User.id == Message.author_id)
             .where(
                 Message.channel_id == channel_id,
                 Message.deleted_at.is_(None),
@@ -47,4 +60,4 @@ class MessageRepository:
         query = query.order_by(Message.created_at.desc()).limit(limit)
 
         result = await db.execute(query)
-        return list(result.scalars().all())
+        return [dict(row._mapping) for row in result.all()]

@@ -4,13 +4,13 @@ services:
     container_name: slack_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: messenger
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: Karen~2004~
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d messenger"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10

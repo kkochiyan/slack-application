@@ -10,12 +10,6 @@ class AuthService:
     async def login(db, email: str, password: str):
         user = await UserRepository.get_by_email(db, email)
 
-        if not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User is inactive",
-            )
-
         if not user or not verify_password(password, user.password_hash):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

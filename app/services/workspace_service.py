@@ -8,29 +8,26 @@ from app.models.workspace import Workspace
 from app.models.workspace_member import WorkspaceMember
 from app.repositories.workspace_repository import WorkspaceRepository
 
-class WorkspaceService:
 
+class WorkspaceService:
     @staticmethod
     async def create_workspace(
-            db: AsyncSession,
-            current_user,
-            name: str,
-            slug: str
+        db: AsyncSession,
+        current_user,
+        name: str,
+        slug: str,
     ) -> Workspace:
-        normalized_name = name.strip()
-        normalized_slug = slug.strip().lower().replace(' ', '-')
+        normalized_name = WorkspaceService._normalize_name(name)
+        normalized_slug = WorkspaceService._normalize_slug(slug)
 
-        if not normalized_name:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Workspace name cannot be empty",
-            )
-
-        if not normalized_slug:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Workspace slug cannot be empty",
-            )
+        WorkspaceService._ensure_not_empty(
+            normalized_name,
+            detail="Workspace name cannot be empty",
+        )
+        WorkspaceService._ensure_not_empty(
+            normalized_slug,
+            detail="Workspace slug cannot be empty",
+        )
 
         existing = await WorkspaceRepository.get_by_slug(db, normalized_slug)
         if existing:
@@ -40,7 +37,7 @@ class WorkspaceService:
             )
 
         workspace = Workspace(
-            name=name.strip(),
+            name=normalized_name,
             slug=normalized_slug,
             owner_id=current_user.id,
         )
@@ -54,7 +51,6 @@ class WorkspaceService:
                 user_id=current_user.id,
                 role="owner",
             )
-
             db.add(membership)
 
             await db.commit()
@@ -71,16 +67,19 @@ class WorkspaceService:
 
     @staticmethod
     async def list_user_workspaces(
-            db: AsyncSession,
-            current_user,
+        db: AsyncSession,
+        current_user,
     ) -> list[Workspace]:
-        return await WorkspaceRepository.get_user_workspaces(db, current_user.id)
+        return await WorkspaceRepository.get_user_workspaces(
+            db,
+            current_user.id,
+        )
 
     @staticmethod
-    async def get_user_workspaces_by_id(
-            db: AsyncSession,
-            workspace_id: UUID,
-            current_user,
+    async def get_user_workspace_by_id(
+        db: AsyncSession,
+        workspace_id: UUID,
+        current_user,
     ) -> Workspace:
         workspace = await WorkspaceRepository.get_user_workspace_by_id(
             db=db,
@@ -91,23 +90,21 @@ class WorkspaceService:
         if not workspace:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Workspace not found"
+                detail="Workspace not found",
             )
 
         return workspace
 
     @staticmethod
     async def delete_workspace(
-            db: AsyncSession,
-            current_user,
-            workspace_id: UUID,
+        db: AsyncSession,
+        current_user,
+        workspace_id: UUID,
     ) -> None:
-        workspace = await WorkspaceRepository.get_by_id(db, workspace_id)
-        if not workspace:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Workspace not found",
-            )
+        workspace = await WorkspaceService._get_workspace_or_404(
+            db=db,
+            workspace_id=workspace_id,
+        )
 
         if workspace.owner_id != current_user.id:
             raise HTTPException(
@@ -117,3 +114,36 @@ class WorkspaceService:
 
         await WorkspaceRepository.delete_workspace(db, workspace)
         await db.commit()
+
+    # ========================
+    # Helpers
+    # ========================
+
+    @staticmethod
+    def _normalize_name(name: str) -> str:
+        return name.strip()
+
+    @staticmethod
+    def _normalize_slug(slug: str) -> str:
+        return slug.strip().lower().replace(" ", "-")
+
+    @staticmethod
+    def _ensure_not_empty(value: str, detail: str) -> None:
+        if not value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=detail,
+            )
+
+    @staticmethod
+    async def _get_workspace_or_404(
+        db: AsyncSession,
+        workspace_id: UUID,
+    ) -> Workspace:
+        workspace = await WorkspaceRepository.get_by_id(db, workspace_id)
+        if not workspace:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Workspace not found",
+            )
+        return workspace

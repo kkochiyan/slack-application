@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     postgres_port: int = 5432
     postgres_db: str = "messenger"
     postgres_user: str = "postgres"
-    postgres_password: str = "password"
+    postgres_password: str = "postgres"
 
     database_url: str | None = None
     redis_url: str = "redis://localhost:6379/0"

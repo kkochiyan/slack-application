@@ -1,0 +1,10 @@
+services:
+  db_test:
+    image: postgres:16
+    container_name: slack_postgres_test
+    environment:
+      POSTGRES_DB: messenger_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"

@@ -39,7 +39,7 @@ async def get_workspace(
         db: AsyncSession = Depends(get_db),
         current_user = Depends(get_cuurent_user),
 ):
-    return await WorkspaceService.get_user_workspaces_by_id(
+    return await WorkspaceService.get_user_workspace_by_id(
         db=db,
         workspace_id=workspace_id,
         current_user=current_user

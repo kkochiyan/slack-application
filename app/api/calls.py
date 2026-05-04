@@ -8,11 +8,9 @@ from app.services.call_ws_manager import call_ws_manager
 
 router = APIRouter(tags=["Calls"])
 
-
 async def get_current_user_from_ws_token(token: str):
     async with AsyncSessionLocal() as db:
         return await AuthService.get_current_user(db, token)
-
 
 @router.websocket("/ws/calls")
 async def calls_websocket(websocket: WebSocket):
